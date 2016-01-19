@@ -22,7 +22,7 @@ void ICACHE_FLASH_ATTR
 user_init()
 {
   // Initialize UART0
-  uart_div_modify(0, UART_CLK_FREQ / 115200);
+  uart_div_modify(0, UART_CLK_FREQ / 9600);
 
   //Set up the hello world task
   system_os_task(task_hello, user_procTaskPrio, user_procTaskQueue, user_procTaskQueueLen);

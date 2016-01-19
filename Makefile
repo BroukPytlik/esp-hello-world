@@ -1,32 +1,24 @@
-# tnx to mamalala
-# Changelog
-# Changed the variables to include the header file directory
-# Added global var for the XTENSA tool root
-#
-# This make file still needs some work.
-#
+# Changelog:
+# 2015/01/19 - fix some issues and make it compatible with esp-open-sdk
 #
 # Output directors to store intermediate compiled files
 # relative to the project directory
 BUILD_BASE	= build
 FW_BASE		= firmware
 
-# Base directory for the compiler
-XTENSA_TOOLS_ROOT ?= /opt/Espressif/crosstool-NG/builds/xtensa-lx106-elf/bin
-
 # base directory of the ESP8266 SDK package, absolute
-SDK_BASE	?= /opt/Espressif/ESP8266_SDK
+SDK_BASE	?= /home/ubuntu/sdk/
 
 #Esptool.py path and port
 ESPTOOL		?= esptool.py
-ESPPORT		?= /dev/ttyUSB0
+ESPPORT		?= /dev/ttyS0
 
 # name for the target project
-TARGET		= app
+TARGET		= hello-world
 
 # which modules (subdirectories) of the project to include in compiling
 MODULES		= driver user
-EXTRA_INCDIR    = include /opt/Espressif/include
+EXTRA_INCDIR    = include
 
 # libraries used in this project, mainly provided by the SDK
 LIBS		= c gcc hal pp phy net80211 lwip wpa main
@@ -45,24 +37,21 @@ SDK_LIBDIR	= lib
 SDK_LDDIR	= ld
 SDK_INCDIR	= include include/json
 
-# we create two different files for uploading into the flash
-# these are the names and options to generate them
-FW_FILE_1	= 0x00000
-FW_FILE_1_ARGS	= -bo $@ -bs .text -bs .data -bs .rodata -bc -ec
-FW_FILE_2	= 0x40000
-FW_FILE_2_ARGS	= -es .irom0.text $@ -ec
-
 # select which tools to use as compiler, librarian and linker
-CC		:= $(XTENSA_TOOLS_ROOT)/xtensa-lx106-elf-gcc
-AR		:= $(XTENSA_TOOLS_ROOT)/xtensa-lx106-elf-ar
-LD		:= $(XTENSA_TOOLS_ROOT)/xtensa-lx106-elf-gcc
+CC		:= xtensa-lx106-elf-gcc
+AR		:= xtensa-lx106-elf-ar
+LD		:= xtensa-lx106-elf-gcc
 
 
 
 ####
 #### no user configurable options below here
 ####
-FW_TOOL		?= /usr/bin/esptool
+
+FW_FILE_1	= 0x00000
+FW_FILE_2	= 0x40000
+
+FW_TOOL		?= $(ESPTOOL)
 SRC_DIR		:= $(MODULES)
 BUILD_DIR	:= $(addprefix $(BUILD_BASE)/,$(MODULES))
 
@@ -81,8 +70,8 @@ INCDIR	:= $(addprefix -I,$(SRC_DIR))
 EXTRA_INCDIR	:= $(addprefix -I,$(EXTRA_INCDIR))
 MODULE_INCDIR	:= $(addsuffix /include,$(INCDIR))
 
-FW_FILE_1	:= $(addprefix $(FW_BASE)/,$(FW_FILE_1).bin)
-FW_FILE_2	:= $(addprefix $(FW_BASE)/,$(FW_FILE_2).bin)
+FW_FILE_1	:= $(addprefix $(FW_BASE)/,$(TARGET)-$(FW_FILE_1).bin)
+FW_FILE_2	:= $(addprefix $(FW_BASE)/,$(TARGET)-$(FW_FILE_2).bin)
 
 V ?= $(VERBOSE)
 ifeq ("$(V)","1")
@@ -107,11 +96,13 @@ all: checkdirs $(TARGET_OUT) $(FW_FILE_1) $(FW_FILE_2)
 
 $(FW_FILE_1): $(TARGET_OUT)
 	$(vecho) "FW $@"
-	$(Q) $(FW_TOOL) -eo $(TARGET_OUT) $(FW_FILE_1_ARGS)
+	$(Q) $(FW_TOOL) elf2image $^
+	$(Q) mv $(BUILD_BASE)/$(TARGET).out-0x00000.bin $(FW_FILE_1)
 
 $(FW_FILE_2): $(TARGET_OUT)
 	$(vecho) "FW $@"
-	$(Q) $(FW_TOOL) -eo $(TARGET_OUT) $(FW_FILE_2_ARGS)
+	$(Q) $(FW_TOOL) elf2image $^
+	$(Q) mv $(BUILD_BASE)/$(TARGET).out-0x40000.bin $(FW_FILE_2)
 
 $(TARGET_OUT): $(APP_AR)
 	$(vecho) "LD $@"
@@ -129,8 +120,8 @@ $(BUILD_DIR):
 firmware:
 	$(Q) mkdir -p $@
 
-flash: firmware/0x00000.bin firmware/0x40000.bin
-	-$(ESPTOOL) --port $(ESPPORT) write_flash 0x00000 firmware/0x00000.bin 0x40000 firmware/0x40000.bin
+flash: $(FW_FILE_1) $(FW_FILE_2)
+	$(ESPTOOL) --port $(ESPPORT) write_flash 0x00000 $(FW_FILE_1) 0x40000 $(FW_FILE_2)
 
 clean:
 	$(Q) rm -f $(APP_AR)
